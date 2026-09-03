@@ -107,10 +107,10 @@ Impact (blast radius on shipping safety) × Frequency (how often it occurs acros
 | Pattern | Risk Category | Evidence | Impact | Frequency | Severity |
 |---------|---------------|----------|--------|-----------|----------|
 | `test` job has no dependency install → `jest: not found` every run | **Workflow Configuration Quality** | 25/30 runs fail identically; docs-only run #28 also fails | High (CI gives no signal) | Very High (25/30) | **Critical** |
-| Real-network gateway integration test | **Test Reliability** | Runs #23 fail / #24 pass on same commit; timeout log | Medium (masks real regressions) | Medium (4/30 + now skipped) | **High** |
 | Security Scan workflow hard-disabled with `if: false` | **Merge Safety Indicators** | `security-scan.yml` line `if: false`; 0 scan runs in history | High (no vuln gate on `main`) | Always (100% of pushes) | **Critical** |
+| Real-network gateway integration test | **Test Reliability** | Runs #23 fail / #24 pass on same commit; timeout log | Medium (masks real regressions) | Medium (4/30 + now skipped) | **High** |
 | Direct pushes to `main`, EOL Node 16, `npm install` not `npm ci` | **Validation Instability** | Commits `hotfix: urgent`, `quick auth patch` on `main`; `node-version: '16'`; `run: npm install` | Medium (non-reproducible builds, no review) | High | **High** |
-| Tests skipped to force green (`test.skip` negative-amount, gateway) | **Test Reliability** | `validateAmount.test.js` skips negative case; feature not implemented in `validateAmount.js` | Medium (coverage gap on money validation) | Medium | **Medium** |
+| Tests skipped to force green (`test.skip` negative-amount, gateway) | **Test Reliability** | `validateAmount.test.js` skips negative case; feature not implemented in `validateAmount.js` | Medium (coverage gap on money validation) | Medium | **High** |
 
 ---
 

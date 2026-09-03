@@ -78,41 +78,81 @@ The pipeline currently provides **no reliable ship/no-ship signal**. The top thr
 | 2 | Security Scan disabled via `if: false`; scan never runs on `main` | Merge Safety Indicators | **Critical** |
 | 3 | Real-network gateway integration test is flaky, then skipped | Test Reliability | **High** |
 | 4 | Direct pushes to `main`, EOL Node 16, `npm install` not `npm ci` | Validation Instability | **High** |
-| 5 | Negative-amount validation test skipped, hiding coverage gap | Test Reliability | **Medium** |
+| 5 | Negative-amount validation test skipped, hiding coverage gap | Test Reliability | **High** |
 
 ---
 
 ## 4. Corrective Actions
 
-### CA-1 — Install dependencies in the `test` job (addresses Observation 1) — **P1 (this sprint)**
-- **Problem:** `test` job fails every run because `node_modules` is never populated (Obs 1).
-- **Action:** Add `actions/setup-node` with dependency caching and an `npm ci` step before `npm test`. Chain the job with `needs: install` (or make `test` self-contained). Applied in this PR.
-- **Tool / file:** `.github/workflows/ci.yml`.
-- **Expected outcome:** `test` job runs Jest against installed deps; failure rate drops from **96.7% → reflects real test status** (currently 18 passing tests). Green builds become meaningful.
+Below are 9 prioritized, actionable recommendations addressing all identified workflow risks across the four risk categories:
 
-### CA-2 — Re-enable the Security Scan (addresses Observation 2) — **P1 (this sprint)**
-- **Problem:** No vulnerability gate on `main`; scan hard-disabled with `if: false` (Obs 2).
-- **Action:** Remove `if: false` so the `scan` job runs `npm audit --audit-level=high` on pushes to `main` and on PRs. Applied in this PR.
-- **Tool / file:** `.github/workflows/security-scan.yml`.
-- **Expected outcome:** Every push to `main` produces an audit result; high/critical CVEs block or alert. Coverage: **0% → 100%** of `main` pushes scanned.
+### Workflow Configuration Quality Recommendations
 
-### CA-3 — Replace the flaky integration test with a mocked gateway (addresses Observation 3) — **P2 (next sprint)**
-- **Problem:** Live HTTP call to `httpstat.us` yields non-deterministic pass/fail; currently skipped, so the gateway path is untested (Obs 3).
-- **Action:** Mock the HTTP layer (e.g. `nock` or `jest.mock('https')`) so the gateway test is deterministic and offline; then un-skip it. Move any true end-to-end check into a separate, non-blocking nightly job.
-- **Tool / file:** `src/payments/processPayment.test.js`, add `nock` dev dependency.
-- **Expected outcome:** Gateway test runs deterministically on every CI run with **0 network-induced flakes**; payment-gateway path regains coverage.
+#### Recommendation 1 (addresses Obs 1) — **P1 (this sprint)**
+- **Problem:** `test` job fails on every run because `node_modules` is not populated (`jest: not found`, exit code 127).
+- **Engineering Action:** Add `actions/setup-node@v4` with dependency caching and an `npm ci` step directly before `npm test` in the `test` job. *(Applied in this PR)*
+- **Tool / File:** `.github/workflows/ci.yml`
+- **Expected Outcome:** `test` job executes Jest against installed dependencies; test run failure rate drops from **96.7% → reflects actual test status**.
 
-### CA-4 — Enforce branch protection and reproducible, supported builds (addresses Observation 4) — **P2 (next sprint)**
-- **Problem:** Unreviewed direct pushes to `main`, EOL Node 16, non-reproducible `npm install` (Obs 4).
-- **Action:** Enable GitHub branch protection on `main` (require PR + 1 review + passing CI, block direct pushes). Bump `node-version` to `20` (LTS) and switch the `install` job to `npm ci`. Node/`npm ci` fixes applied in this PR; branch protection is a repo-settings change for the lead.
-- **Tool / file:** `.github/workflows/ci.yml` + GitHub → Settings → Branches.
-- **Expected outcome:** **0 unreviewed commits** on `main`; reproducible installs from the lockfile; CI runs on a supported runtime.
+#### Recommendation 2 (addresses Obs 1) — **P1 (this sprint)**
+- **Problem:** `test` job executed independently without verifying that dependency installation succeeded.
+- **Engineering Action:** Add `needs: install` job dependency in `ci.yml` to enforce strict sequential execution. *(Applied in this PR)*
+- **Tool / File:** `.github/workflows/ci.yml`
+- **Expected Outcome:** Prevent downstream jobs from executing if package installation fails.
 
-### CA-5 — Implement and un-skip negative-amount validation (addresses Observation 5) — **P3 (backlog)**
-- **Problem:** Negative-amount rejection test is skipped, hiding a money-validation coverage gap (Obs 5).
-- **Action:** Confirm `validateAmount` rejects negatives (`amount <= 0` already does), remove the `test.skip`, and make it a normal passing test.
-- **Tool / file:** `src/utils/validateAmount.test.js`.
-- **Expected outcome:** **0 skipped tests** in the suite; explicit coverage of negative-amount rejection.
+---
+
+### Merge Safety Indicators Recommendations
+
+#### Recommendation 3 (addresses Obs 2) — **P1 (this sprint)**
+- **Problem:** Security vulnerability scanning was silently disabled on `main` via `if: false`.
+- **Engineering Action:** Remove `if: false` condition from `security-scan.yml` so `npm audit --audit-level=high` runs on pushes to `main` and PRs. *(Applied in this PR)*
+- **Tool / File:** `.github/workflows/security-scan.yml`
+- **Expected Outcome:** Scan coverage increases from **0% → 100%** of pushes to `main`; high/critical vulnerabilities trigger alerts.
+
+#### Recommendation 4 (addresses Obs 2) — **P1 (this sprint)**
+- **Problem:** No blocking status checks exist to prevent merging vulnerable code.
+- **Engineering Action:** Configure `Security Scan` as a required status check in GitHub repository branch protection settings.
+- **Tool / File:** GitHub Repository Settings → Branches → Branch Protection Rules (`main`)
+- **Expected Outcome:** PRs with high or critical CVEs are blocked from merging into `main`.
+
+---
+
+### Test Reliability Recommendations
+
+#### Recommendation 5 (addresses Obs 3) — **P2 (next sprint)**
+- **Problem:** Real network call to `https://httpstat.us/200?sleep=100` causes non-deterministic test timeouts (runs #23 vs #24).
+- **Engineering Action:** Mock the HTTP gateway responses using `nock` or `jest.mock('https')` in `processPayment.test.js`.
+- **Tool / File:** `src/payments/processPayment.test.js`
+- **Expected Outcome:** Eliminates **100% of network-induced test flakes**; test suite runs entirely offline.
+
+#### Recommendation 6 (addresses Obs 3) — **P2 (next sprint)**
+- **Problem:** Gateway integration test was skipped (`test.skip`), removing coverage of payment gateway integration.
+- **Engineering Action:** Un-skip the gateway test after replacing external HTTP calls with deterministic mocks.
+- **Tool / File:** `src/payments/processPayment.test.js`
+- **Expected Outcome:** Payment gateway integration code path is continuously validated on every commit without flake risk.
+
+#### Recommendation 7 (addresses Obs 5) — **P3 (backlog)**
+- **Problem:** Negative amount validation test is skipped (`test.skip`), creating a coverage gap on financial input checks.
+- **Engineering Action:** Verify negative amount rejection logic in `validateAmount.js`, remove `test.skip` from `validateAmount.test.js`, and assert `false` for negative inputs.
+- **Tool / File:** `src/utils/validateAmount.js`, `src/utils/validateAmount.test.js`
+- **Expected Outcome:** **0 skipped tests** in the unit test suite; explicit test coverage for negative financial transactions.
+
+---
+
+### Validation Instability Recommendations
+
+#### Recommendation 8 (addresses Obs 4) — **P2 (next sprint)**
+- **Problem:** Direct pushes to `main` (`hotfix: urgent payment fix`, `quick auth patch`) bypass peer review and CI checks.
+- **Engineering Action:** Enable GitHub branch protection on `main` to mandate pull requests with at least 1 peer approval and passing status checks.
+- **Tool / File:** GitHub Repository Settings → Branches → `main` protection rules
+- **Expected Outcome:** **0 unreviewed commits** land on `main`; all changes pass mandatory CI checks prior to merge.
+
+#### Recommendation 9 (addresses Obs 4) — **P2 (next sprint)**
+- **Problem:** Workflows pinned EOL Node 16 and used non-deterministic `npm install` instead of lockfile-based `npm ci`.
+- **Engineering Action:** Upgrade all workflow jobs to Node 20 LTS (`node-version: '20'`) and standardize all dependency installation commands to `npm ci`. *(Applied in this PR)*
+- **Tool / File:** `.github/workflows/ci.yml`, `.github/workflows/security-scan.yml`
+- **Expected Outcome:** Guaranteed reproducible builds matching `package-lock.json` across modern LTS Node environments.
 
 ---
 
